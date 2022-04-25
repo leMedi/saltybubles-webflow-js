@@ -1,6 +1,6 @@
 "use strict";
 
-const { useCallback, useEffect, useMemo, useState } = React;
+const { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } = React;
 
 const Web3Modal = window.Web3Modal.default;
 
@@ -93,17 +93,75 @@ const ShowToken = ({ tokenId }) => {
 
   return (
     <div>
-      <h3>
-        Token {tokenId}: {metadata.name}
-      </h3>
       <img src={ipfsLinkToHttp(metadata.image)} />
+      <h3 style={{color: '#1783d6'}}>{metadata.name}</h3>
     </div>
   );
 };
 
+
+function createWrapperAndAppendToBody(wrapperId) {
+  const wrapperElement = document.createElement('div');
+  wrapperElement.setAttribute("id", wrapperId);
+  document.body.appendChild(wrapperElement);
+  return wrapperElement;
+}
+
+function ReactPortal({ children, wrapperId = "react-portal-wrapper" }) {
+  const [wrapperElement, setWrapperElement] = useState(null);
+
+  useLayoutEffect(() => {
+    let element = document.getElementById(wrapperId);
+    let systemCreated = false;
+    if (!element) {
+      systemCreated = true;
+      element = createWrapperAndAppendToBody(wrapperId);
+    }
+    setWrapperElement(element);
+  
+    return () => {
+      if (systemCreated && element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
+    }
+  }, [wrapperId]);
+
+  if (wrapperElement === null) return null;
+
+  return ReactDOM.createPortal(children, wrapperElement);
+}
+
+function Modal({ children, handleClose }) {
+	const nodeRef = useRef(null);
+	
+  useEffect(() => {
+		const closeOnEscapeKey = (e) => (e.key === "Escape" ? handleClose() : null);
+		document.body.addEventListener("keydown", closeOnEscapeKey);
+		return () => {
+			document.body.removeEventListener("keydown", closeOnEscapeKey);
+		};
+	}, [handleClose]);
+
+	return (
+		<ReactPortal>
+				<div className="modal" onClick={() => { console.log('clieck modals'); handleClose() }} ref={nodeRef}>
+					<div className="modal-content">{children}</div>
+				</div>
+		</ReactPortal>
+	);
+}
+
+const MintStatusMessages = {
+  'SUBMITED': 'Please Accept Transaction',
+  'PENDING': 'Transactions sent to blockchain',
+  'SUCCESS': 'Yaaay new token minted',
+  'FAILED': 'Ouups',
+}
+
 const Mint = ({ address, provider }) => {
   const [mintStatus, setMintStatus] = useState(null);
   const [mintedTokenId, setMintedTokenId] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
 
   const signer = useMemo(() => provider.getSigner(), [provider]);
   const contract = useMemo(
@@ -120,14 +178,14 @@ const Mint = ({ address, provider }) => {
     try {
       console.log(contract);
       setMintedTokenId(null);
-      setMintStatus("submited");
+      setMintStatus("SUBMITED");
       const mint = await contract.mint(address, {
         value: ethers.utils.parseEther(TOKEN_PRICE),
         gasLimit: 300000,
       });
-      setMintStatus("pending");
+      setMintStatus("PENDING");
       const txReciept = await mint.wait();
-      setMintStatus("success");
+      setMintStatus("SUCCESS");
       const mintedEvent = parseMintEvent(txReciept);
       if (!mintedEvent) return;
       console.log("event", mintedEvent);
@@ -135,7 +193,8 @@ const Mint = ({ address, provider }) => {
       setMintedTokenId(_mintedTokenId.toNumber());
     } catch (error) {
       console.error(error);
-      setMintStatus("failed");
+      setMintStatus("FAILED");
+      setErrorMsg(error.message)
     }
   }, [contract]);
 
@@ -155,15 +214,17 @@ const Mint = ({ address, provider }) => {
   );
 
   return (
-    <div>
-      <p>Hello World {address}</p>
-      <p>
-        Mint Status: <b>{mintStatus}</b>
-      </p>
-      <button onClick={mint}>mint</button>
-
-      {mintedTokenId && <ShowToken tokenId={mintedTokenId} />}
-    </div>
+    <React.Fragment>
+      <button className="secondary-btn w-button" onClick={mint}>Mint Your Token</button>
+      { mintStatus &&
+        (<Modal handleClose={() => setMintStatus(null)}>
+          <h3>{MintStatusMessages[mintStatus]}</h3>
+          {mintStatus === 'PENDING' && <img src="https://lemedi.github.io/saltybubles-webflow-js/loading.gif" />}
+          {errorMsg && <p className="error-msg">{errorMsg}</p>}
+          {mintedTokenId && <ShowToken tokenId={mintedTokenId} />}
+        </Modal>)
+      }
+    </React.Fragment>
   );
 };
 
@@ -195,9 +256,9 @@ const Main = () => {
   if (web3Provider && address)
     return <Mint provider={web3Provider} address={address} />;
 
-  return <button onClick={connect}>hello</button>;
+  return <a className="connect-btn w-button" href="#" onClick={connect}>Connect Wallet</a>;
 };
 
-ReactDOM.createRoot(document.getElementById("wallet-button-container")).render(
+ReactDOM.createRoot(document.getElementById("mint-nft-btn-container")).render(
   React.createElement(Main)
 );
