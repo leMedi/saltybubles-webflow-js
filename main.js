@@ -4,8 +4,9 @@ const { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } = R
 
 const Web3Modal = window.Web3Modal.default;
 
-const SALTYBUBLES_SMARTCONTRACT_ADDRESS =
-  "0x5A822a4a563B649A6E8Fb8b9df1c087eF6223dc5";
+// this variable will initialized on the html page 
+// const SALTYBUBLES_SMARTCONTRACT_ADDRESS = "";
+
 const SALTYBUBLES_ABI = [
   {
     inputs: [
